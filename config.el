@@ -80,19 +80,22 @@
               :custom (lsp-pyright-langserver-command "basedpyright"))
 (after! lsp-ui
   (map! :map lsp-ui-mode-map
-        :localleader
-        "lfr" #'lsp-ui-peek-find-references
-        "li" #'lsp-ui-imenu
+        :leader
+        :prefix ("l" . "LSP")
+        "k" #'lsp-ui-peek-find-references
+        "w" #'lsp-ui-imenu
         ))
 (after! lsp-mode
   (map! :map lsp-mode-map
-        :localleader
-        "lr" #'lsp-rename
-        "lf" #'lsp-format-buffer
-        "la" #'lsp-execute-code-action
-        "ll" #'lsp-workspace-restart
-        "lfg" #'lsp-find-references
-        "gr" #'lsp-find-references
+        :leader
+        :prefix ("l" . "LSP")
+        "r" #'lsp-rename
+        "f" #'lsp-format-buffer
+        "a" #'lsp-execute-code-action
+        "l" #'lsp-workspace-restart
+        "r" #'lsp-find-references
+        "i" #'lsp-find-implementation
+        "f" #'lsp-clangd-find-other-file
         ))
 
 (remove-hook 'doom-first-input-hook #'evil-snipe-mode)
