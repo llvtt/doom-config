@@ -77,7 +77,7 @@
 ;; You can also try 'gd' (or 'C-c c d') to jump to their definition and see how
 ;; they are implemented.
 (use-package! lsp-pyright :defer
-  :custom (lsp-pyright-langserver-command "basedpyright"))
+              :custom (lsp-pyright-langserver-command "basedpyright"))
 (after! lsp-ui
   (map! :map lsp-ui-mode-map
         :localleader
@@ -90,12 +90,36 @@
         "lr" #'lsp-rename
         "lf" #'lsp-format-buffer
         "la" #'lsp-execute-code-action
-        "ll" #'lsp-restart-workspace
+        "ll" #'lsp-workspace-restart
         "lfg" #'lsp-find-references
         "gr" #'lsp-find-references
         ))
 
 (remove-hook 'doom-first-input-hook #'evil-snipe-mode)
+
+;;;;;;;;;;;
+;; CMAKE ;;
+;;;;;;;;;;;
+
+(defun my/cmake-run-google-test-at-point ()
+  (interactive)
+  (save-excursion
+    (let ((case-fold-search nil)
+          (found (re-search-backward "^\\s-*TEST\\(_F\\)?(\\([^,]+\\)\\s-*,\\s-*\\([^\\)]+\\)" nil t)))
+      (when found
+        (let ((test-args (format "--gtest_filter=%s.%s" (string-trim (match-string 2)) (string-trim (match-string 3)))))
+          (cmake-integration-run-last-target-with-arguments test-args))))))
+
+(after! cmake-integration
+  (map! :map cmake-integration-project-mode-map
+        :localleader
+        "cc" #'cmake-integration-save-and-compile
+        "ck" #'cmake-integration-cmake-reconfigure
+        "cr" #'cmake-integration-run-last-target
+        "car" #'cmake-integration-run-last-target-with-arguments
+        "cg" #'my/cmake-run-google-test-at-point
+        "cd" #'cmake-integration-debug-last-target))
+(add-hook! '(c-ts-mode-hook c++-ts-mode-hook) #'cmake-integration-project-mode)
 
 ;;;;;;;;;;;;;;;
 ;; MODE LINE ;;
@@ -156,20 +180,20 @@ STATUS is `starting' or `initialized'."
           ;; (eval global-mode-string)
           ;; "]"
           ;; (my/lsp-overall-status) "  "
-          ; TODO - abbreviate this from "Checking" and "No issues"
-          ; TODO - add a segment that captures the status of the LSP process
+                                        ; TODO - abbreviate this from "Checking" and "No issues"
+                                        ; TODO - add a segment that captures the status of the LSP process
           (mood-line-segment-checker) "  "
           (mood-line-segment-process) "  " " ")
          ))
   :custom
   (mood-line-segment-modal-evil-state-alist
    '((normal . ("[N]" . font-lock-variable-name-face))
-    (insert . ("[I]" . font-lock-string-face))
-    (visual . ("[V]" . font-lock-keyword-face))
-    (replace . ("[R]" . font-lock-type-face))
-    (motion . ("[M]" . font-lock-constant-face))
-    (operator . ("[O]" . font-lock-function-name-face))
-    (emacs . ("[E]" . font-lock-builtin-face))))
+     (insert . ("[I]" . font-lock-string-face))
+     (visual . ("[V]" . font-lock-keyword-face))
+     (replace . ("[R]" . font-lock-type-face))
+     (motion . ("[M]" . font-lock-constant-face))
+     (operator . ("[O]" . font-lock-function-name-face))
+     (emacs . ("[E]" . font-lock-builtin-face))))
   (mood-line-glyph-alist
    '((:buffer-modified . ?変)
      (:buffer-read-only . ?鍵))))
@@ -180,6 +204,13 @@ STATUS is `starting' or `initialized'."
   (global-set-key (kbd "<f9>") 'dape-continue)
   (global-set-key (kbd "<f10>") 'dape-step-out))
 
+(after! projectile
+  (map! :map projectile-mode-map
+        "<f12>" 'projectile-find-file))
+
+(setq-hook! '(typescript-mode-hook javascript-mode-hook) +format-with '(eslint prettier))
+(add-hook! '(javascript-mode-hook typescript-mode-hook) #'jest-test-mode)
+
 ;; Final configuration that overrides everything else
 (fset 'yes-or-no-p 'y-or-n-p)
 (setq confirm-kill-emacs nil)
@@ -189,23 +220,23 @@ STATUS is `starting' or `initialized'."
 (evil-global-set-key 'insert (kbd "C-z") 'suspend-frame)
 (evil-global-set-key 'visual (kbd "C-z") 'suspend-frame)
 (general-define-key
-  :states '(normal visual motion)
-  :keymaps 'override
-  "C-w o" #'delete-other-windows)
+ :states '(normal visual motion)
+ :keymaps 'override
+ "C-w o" #'delete-other-windows)
 (general-define-key
-  :states '(normal visual motion)
-  :keymaps 'override
-  "C-w O" #'doom/window-enlargen)
+ :states '(normal visual motion)
+ :keymaps 'override
+ "C-w O" #'doom/window-enlargen)
 (defun comment-thing ()
   (interactive)
   (if (region-active-p)
       (comment-or-uncomment-region (region-beginning) (region-end))
     (comment-or-uncomment-region (line-beginning-position) (line-end-position))
-    (next-line 1)))
+    (forward-line 1)))
 (general-define-key
-  :states '(normal visual motion)
-  :keymaps 'override
-  ";" #'comment-thing)
+ :states '(normal visual motion)
+ :keymaps 'override
+ ";" #'comment-thing)
 (global-set-key (kbd "<escape>") 'evil-normal-state)
 (defun occur-all-buffers (arg)
   (interactive "sSearch for regex: ")
