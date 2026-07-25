@@ -57,3 +57,7 @@
 (package! tablist)  ; dependency of cmake-integration
 (package! cmake-integration
   :recipe (:host github :repo "darcamo/cmake-integration" :type git))
+
+(package! ghostel)
+(package! claude-code-ide
+  :recipe (:host github :repo "manzaltu/claude-code-ide.el"))

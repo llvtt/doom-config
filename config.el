@@ -34,7 +34,8 @@
 ;; (setq doom-theme 'doom-old-hope)
 ;; (setq doom-theme 'doom-laserwave)
 ;; (setq doom-theme 'doom-dark+)
-(setq doom-theme 'doom-snazzy)
+;; (setq doom-theme 'doom-snazzy)
+(setq doom-theme 'doom-monokai-pro)
 
 ;; This determines the style of line numbers in effect. If set to `nil', line
 ;; numbers are disabled. For relative line numbers, set this to `relative'.
@@ -124,6 +125,16 @@
         "cd" #'cmake-integration-debug-last-target))
 (add-hook! '(c-ts-mode-hook c++-ts-mode-hook) #'cmake-integration-project-mode)
 
+;;;;;;;;;
+;; LLM ;;
+;;;;;;;;;
+
+(use-package! claude-code-ide
+  :bind ("<f2>" . claude-code-ide-menu) ; Set your favorite keybinding
+  :config
+  (setq claude-code-ide-terminal-backend 'ghostel)
+  (claude-code-ide-emacs-tools-setup)) ; Optionally enable Emacs MCP tools
+
 ;;;;;;;;;;;;;;;
 ;; MODE LINE ;;
 ;;;;;;;;;;;;;;;
@@ -141,6 +152,15 @@
   (setq lsp-modeline-workspace-status-enable t
         lsp-modeline-diagnostics-enable t
         lsp-modeline-code-actions-enable t))
+
+(use-package! code-review
+  :config
+  (require 'ghub-legacy)
+  (setq code-review-auth-login-marker 'forge))
+
+;;;;;;;;;;;;;;;
+;; MODE LINE ;;
+;;;;;;;;;;;;;;;
 
 (use-package! mood-line
   :config
@@ -207,9 +227,19 @@ STATUS is `starting' or `initialized'."
   (global-set-key (kbd "<f9>") 'dape-continue)
   (global-set-key (kbd "<f10>") 'dape-step-out))
 
+;; --- projectile ---
 (after! projectile
   (map! :map projectile-mode-map
         "<f12>" 'projectile-find-file))
+
+;; --- docker ---
+(use-package! treesit
+  :config
+  (add-to-list 'treesit-language-source-alist
+               '(dockerfile "https://github.com/camdencheek/tree-sitter-dockerfile"))
+  (add-to-list 'major-mode-remap-alist '(dockerfile-mode . dockerfile-ts-mode))
+  ;; Dockerfile was not loading in dockerfile-mode, so was not being remapped
+  (add-to-list 'auto-mode-alist '("Dockerfile" . dockerfile-ts-mode)))
 
 (setq-hook! '(typescript-mode-hook javascript-mode-hook) +format-with '(eslint prettier))
 (add-hook! '(javascript-mode-hook typescript-mode-hook) #'jest-test-mode)
