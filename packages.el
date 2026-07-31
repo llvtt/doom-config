@@ -59,5 +59,8 @@
   :recipe (:host github :repo "darcamo/cmake-integration" :type git))
 
 (package! ghostel)
+(package! evil-ghostel)
 (package! claude-code-ide
   :recipe (:host github :repo "manzaltu/claude-code-ide.el"))
+
+(package! git-link)

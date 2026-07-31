@@ -90,7 +90,7 @@
   (map! :map lsp-mode-map
         :leader
         :prefix ("l" . "LSP")
-        "r" #'lsp-rename
+        "n" #'lsp-rename
         "f" #'lsp-format-buffer
         "a" #'lsp-execute-code-action
         "l" #'lsp-workspace-restart
@@ -125,6 +125,50 @@
         "cd" #'cmake-integration-debug-last-target))
 (add-hook! '(c-ts-mode-hook c++-ts-mode-hook) #'cmake-integration-project-mode)
 
+;; --- shell configuration ---
+(use-package! ghostel-compile
+  :hook
+  (after-init . ghostel-compile-global-mode))
+(use-package! ghostel-comint
+  :hook
+  (after-init . ghostel-comint-global-mode))
+(use-package! evil-ghostel
+  :after (ghostel evil)
+  :hook (ghostel-mode . evil-ghostel-mode))
+
+;; ghostel derives from fundamental-mode and ships no evil integration, so
+;; terminals would otherwise come up in normal state. Land in insert so keys
+;; reach the terminal. This covers claude-code-ide too, since it uses the
+;; ghostel backend. C-z drops to emacs state; ESC to normal state.
+                                        ;(after! evil
+                                        ;  (evil-set-initial-state 'ghostel-mode 'insert))
+
+;; ghostel leaves C-c C-u free. Send it through the terminal's key encoder
+;; rather than a raw "\x15" so kitty-keyboard-protocol apps see it too.
+(defun my/ghostel-send-C-u ()
+  "Send \\`C-u' to the terminal, clearing the current input line."
+  (interactive)
+  (ghostel-send-key "u" "ctrl"))
+
+(after! ghostel
+  ;; :n shadows evil's `c' operator in ghostel buffers (so cw/ciw are gone
+  ;; there), which is fine — there is no editable buffer text to change.
+  (map! :map ghostel-mode-map
+        :i "C-c C-g" #'ghostel-send-C-g
+        :g "C-c C-u" #'my/ghostel-send-C-u
+        :n "cc" #'my/ghostel-send-C-u))
+
+;; --- git link ---
+(after! git-link
+  (setq git-link-use-commit t)
+
+  (general-define-key
+   :states '(normal visual motion)
+   :keymaps 'override
+   "<SPC>ml" #'git-link))
+
+;; git link
+
 ;;;;;;;;;
 ;; LLM ;;
 ;;;;;;;;;
@@ -134,6 +178,29 @@
   :config
   (setq claude-code-ide-terminal-backend 'ghostel)
   (claude-code-ide-emacs-tools-setup)) ; Optionally enable Emacs MCP tools
+
+;; claude-code-ide ships no minor mode of its own, so buffer-local keys would
+;; otherwise have to go in ghostel's shared mode maps and leak into every
+;; terminal. This map only exists where the minor mode is enabled.
+;; Kept at top level (not in :config) so the definitions are byte-compilable.
+(defvar-keymap claude-code-ide-buffer-mode-map
+  :doc "Keys active only in Claude Code terminal buffers.")
+
+(define-minor-mode claude-code-ide-buffer-mode
+  "Buffer-local keybindings for Claude Code sessions."
+  :keymap claude-code-ide-buffer-mode-map)
+
+;; Runs with the Claude buffer current; evil-normalize-keymaps is what makes
+;; the per-state bindings below visible to evil.
+(defun my/claude-code-ide-enable-buffer-mode ()
+  (claude-code-ide-buffer-mode 1)
+  (evil-normalize-keymaps))
+(advice-add 'claude-code-ide--setup-terminal-keybindings :after
+            #'my/claude-code-ide-enable-buffer-mode)
+
+(map! :map claude-code-ide-buffer-mode-map
+      :i "M-<RET>" #'claude-code-ide-insert-newline
+      :g "<f1>" #'claude-code-ide-send-escape)
 
 ;;;;;;;;;;;;;;;
 ;; MODE LINE ;;
@@ -241,7 +308,7 @@ STATUS is `starting' or `initialized'."
   ;; Dockerfile was not loading in dockerfile-mode, so was not being remapped
   (add-to-list 'auto-mode-alist '("Dockerfile" . dockerfile-ts-mode)))
 
-(setq-hook! '(typescript-mode-hook javascript-mode-hook) +format-with '(eslint prettier))
+(setq-hook! '(typescript-mode-hook javascript-mode-hook) +format-with '(lsp eslint prettier))
 (add-hook! '(javascript-mode-hook typescript-mode-hook) #'jest-test-mode)
 
 ;; Final configuration that overrides everything else
