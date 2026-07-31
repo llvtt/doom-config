@@ -83,9 +83,7 @@
   (map! :map lsp-ui-mode-map
         :leader
         :prefix ("l" . "LSP")
-        "k" #'lsp-ui-peek-find-references
-        "w" #'lsp-ui-imenu
-        ))
+        "k" #'lsp-ui-peek-find-references))
 (after! lsp-mode
   (map! :map lsp-mode-map
         :leader
@@ -97,6 +95,7 @@
         "r" #'lsp-find-references
         "i" #'lsp-find-implementation
         "f" #'lsp-clangd-find-other-file
+        "s" #'consult-lsp-file-symbols
         ))
 
 (remove-hook 'doom-first-input-hook #'evil-snipe-mode)
@@ -202,9 +201,35 @@
       :i "M-<RET>" #'claude-code-ide-insert-newline
       :g "<f1>" #'claude-code-ide-send-escape)
 
-;;;;;;;;;;;;;;;
-;; MODE LINE ;;
-;;;;;;;;;;;;;;;
+;;;;;;;;
+;; UI ;;
+;;;;;;;;
+
+
+;; --- imenu ---
+
+;; We need a nerd-font compatible font like this one:
+;; brew install font-iosevka-term-nerd-font
+(use-package! symbols-outline
+  :commands symbols-outline-show
+  ;; `:init', not `:config': the binding has to exist *before* the package
+  ;; loads, since pressing the key is what autoloads it.
+  :init
+  (setq symbols-outline-fetch-fn #'symbols-outline-lsp-fetch)
+  (map! :leader
+        :prefix ("l" . "LSP")
+        :desc "Symbols outline" "w" #'symbols-outline-show)
+  :config
+  (symbols-outline-follow-mode t)
+  ;; `symbols-outline-mode' derives from `special-mode', so its major-mode map
+  ;; loses to evil's state maps (RET -> `evil-ret' in motion state). Rebind as
+  ;; an evil auxiliary binding so it actually wins.
+  (map! :map symbols-outline-mode-map
+        :nvm "RET" #'symbols-outline-visit
+        :nvm [return] #'symbols-outline-visit
+        :nvm "M-RET" #'symbols-outline-visit-and-quit))
+
+;; --- mode line ---
 
 (use-package! rich-minority
   :defer nil
@@ -219,15 +244,6 @@
   (setq lsp-modeline-workspace-status-enable t
         lsp-modeline-diagnostics-enable t
         lsp-modeline-code-actions-enable t))
-
-(use-package! code-review
-  :config
-  (require 'ghub-legacy)
-  (setq code-review-auth-login-marker 'forge))
-
-;;;;;;;;;;;;;;;
-;; MODE LINE ;;
-;;;;;;;;;;;;;;;
 
 (use-package! mood-line
   :config
@@ -308,10 +324,24 @@ STATUS is `starting' or `initialized'."
   ;; Dockerfile was not loading in dockerfile-mode, so was not being remapped
   (add-to-list 'auto-mode-alist '("Dockerfile" . dockerfile-ts-mode)))
 
+;;;;;;;;;;;;;;;;;;;;;
+;; VERSION CONTROL ;;
+;;;;;;;;;;;;;;;;;;;;;
+
+(use-package! code-review
+  :config
+  (require 'ghub-legacy)
+  (setq code-review-auth-login-marker 'forge))
+
+;;;;;;;;;;;;;;;;;;
+;; GLOBAL STUFF ;;
+;;;;;;;;;;;;;;;;;;
+;;
+;; Final configuration that overrides everything else
+
 (setq-hook! '(typescript-mode-hook javascript-mode-hook) +format-with '(lsp eslint prettier))
 (add-hook! '(javascript-mode-hook typescript-mode-hook) #'jest-test-mode)
 
-;; Final configuration that overrides everything else
 (fset 'yes-or-no-p 'y-or-n-p)
 (setq confirm-kill-emacs nil)
 (xterm-mouse-mode t)

@@ -64,3 +64,5 @@
   :recipe (:host github :repo "manzaltu/claude-code-ide.el"))
 
 (package! git-link)
+
+(package! symbols-outline)
