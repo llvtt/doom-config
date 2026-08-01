@@ -66,3 +66,5 @@
 (package! git-link)
 
 (package! symbols-outline)
+
+(package! protobuf-mode)

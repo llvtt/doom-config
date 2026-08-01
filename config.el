@@ -245,6 +245,26 @@
         lsp-modeline-diagnostics-enable t
         lsp-modeline-code-actions-enable t))
 
+;; --- protobuf ---
+;; protols is fully-featured lsp language server that uses protoc (unlike buf)
+;; cargo install protols
+(after! lsp-mode
+  (lsp-register-client
+   (make-lsp-client
+    :new-connection (lsp-stdio-connection
+                     (lambda () (list (or (executable-find "protols") "protols"))))
+    :activation-fn (lsp-activate-on "protobuf")
+    :language-id "protobuf"
+    :priority 1
+    :server-id 'protols)))
+
+(add-hook! 'protobuf-mode-hook #'lsp!)
+
+;; disable protoc, it doesn't know how to resolve paths on its own
+(after! flycheck
+  (add-hook! 'protobuf-mode-hook
+    (add-to-list 'flycheck-disabled-checkers 'protobuf-protoc)))
+
 (use-package! mood-line
   :config
   (mood-line-mode t)
