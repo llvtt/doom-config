@@ -344,6 +344,37 @@ STATUS is `starting' or `initialized'."
   ;; Dockerfile was not loading in dockerfile-mode, so was not being remapped
   (add-to-list 'auto-mode-alist '("Dockerfile" . dockerfile-ts-mode)))
 
+;;;;;;;;;;;;;
+;; EDITING ;;
+;;;;;;;;;;;;;
+
+;; --- multiple cursors ---
+
+;; Doom rewires evil-mc so `evil-mc-mode' is only on while cursors exist, which
+;; makes `evil-mc-initialize-active-state' an exact "session started" boundary:
+;; `evil-mc-run-cursors-before' only fires it when no cursors exist yet, so it
+;; runs once per session. Hand it to hercules and the whole `gz' map goes
+;; sticky the moment the first cursor appears -- `gzd' then repeats on a bare
+;; `d'. `gz' itself is never rebound, so the vanilla prefix still works.
+;;
+;; `after!' is load-bearing: `evil-mc-initialize-active-state' isn't in the
+;; module's `:commands' list, and `hercules--advise' will `fset' a no-op onto
+;; any name that isn't a function yet.
+(after! evil-mc
+  ;; hercules wants a *symbol* whose value is a keymap, and Doom's `gz'
+  ;; bindings already live in a real prefix map. Reuse it instead of restating
+  ;; all 17 of them.
+  (defvar +mc-cursors-map (lookup-key evil-normal-state-map (kbd "gz"))
+    "Doom's `gz' multiple-cursors prefix keymap.")
+
+  ;; `:transient t' routes through `set-transient-map', so keys in the map
+  ;; repeat and any other key dismisses the popup and runs normally. It also
+  ;; supplies the exit function, hence no `:hide-funs' here.
+  (hercules-def
+   :show-funs '(evil-mc-initialize-active-state)
+   :keymap    '+mc-cursors-map
+   :transient t))
+
 ;;;;;;;;;;;;;;;;;;;;;
 ;; VERSION CONTROL ;;
 ;;;;;;;;;;;;;;;;;;;;;
