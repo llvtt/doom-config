@@ -384,6 +384,10 @@ STATUS is `starting' or `initialized'."
   (require 'ghub-legacy)
   (setq code-review-auth-login-marker 'forge))
 
+(use-package! magit
+  :config
+  (setq git-commit-summary-max-length 100))
+
 ;;;;;;;;;;;;;;;;;;
 ;; GLOBAL STUFF ;;
 ;;;;;;;;;;;;;;;;;;
