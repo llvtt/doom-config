@@ -204,13 +204,14 @@
 
 ;; --- git link ---
 
-(after! git-link
+(use-package! git-link
+  :config
   (setq git-link-use-commit t)
 
   (general-define-key
    :states '(normal visual motion)
    :keymaps 'override
-   "<SPC>ml" #'git-link))
+   "<SPC>gh" #'git-link))
 
 ;; --- claude code ---
 
