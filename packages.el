@@ -51,7 +51,6 @@
 
 (package! pyvenv)
 (package! rich-minority)
-(package! mood-line)
 (package! jest-test-mode)
 
 (package! tablist)  ; dependency of cmake-integration
@@ -72,3 +71,6 @@
 ;; Makes an existing keymap sticky and shows it via which-key. Used to turn
 ;; Doom's `gz' multiple-cursors prefix into a repeating popup; see config.el.
 (package! hercules)
+
+(package! mise)
+(package! mise-tasks)

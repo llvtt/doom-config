@@ -34,7 +34,7 @@
 ;; (setq doom-theme 'doom-old-hope)
 ;; (setq doom-theme 'doom-laserwave)
 ;; (setq doom-theme 'doom-dark+)
-;; (setq doom-theme 'doom-snazzy)
+;; (setq doom-theme 'doom-snazzy        )
 (setq doom-theme 'doom-monokai-pro)
 
 ;; This determines the style of line numbers in effect. If set to `nil', line
@@ -95,14 +95,31 @@
         "r" #'lsp-find-references
         "i" #'lsp-find-implementation
         "f" #'lsp-clangd-find-other-file
-        "s" #'consult-lsp-file-symbols
-        ))
+        "s" #'consult-lsp-file-symbols))
 
 (remove-hook 'doom-first-input-hook #'evil-snipe-mode)
 
-;;;;;;;;;;;
-;; CMAKE ;;
-;;;;;;;;;;;
+;;;;;;;;;;;;;;;;;;;;;;;
+;; TOOL INTEGRATIONS ;;
+;;;;;;;;;;;;;;;;;;;;;;;
+
+;; --- mise ---
+(use-package! mise
+  :hook (after-init-hook . #'global-mise-mode))
+(use-package! mise-tasks
+  :config
+  (mise-tasks-projectile-mode t)
+  (map! :leader
+        :prefix ("r" . "Run")
+        :desc "List tasks" "l" #'mise-tasks-list
+        :desc "Run task" "c" #'mise-tasks-run
+        :desc "Run last" "r" #'mise-tasks-run-last)
+  (evil-define-key '(normal motion) mise-tasks-list-mode-map
+    (kbd "RET") #'mise-tasks-list-run-at-point
+    "g" #'mise-tasks-list-refresh
+    "x" #'mise-tasks-list-kill))
+
+;; --- cmake ---
 
 (defun my/cmake-run-google-test-at-point ()
   (interactive)
@@ -118,19 +135,38 @@
         :localleader
         "cc" #'cmake-integration-save-and-compile
         "ck" #'cmake-integration-cmake-reconfigure
+        "cK" #'cmake-integration-cmake-configure-with-preset
         "cr" #'cmake-integration-run-last-target
         "car" #'cmake-integration-run-last-target-with-arguments
         "cg" #'my/cmake-run-google-test-at-point
         "cd" #'cmake-integration-debug-last-target))
 (add-hook! '(c-ts-mode-hook c++-ts-mode-hook) #'cmake-integration-project-mode)
 
+;; brew install neocmakelsp
+(after! lsp-mode
+  (lsp-register-client
+   (make-lsp-client
+    :new-connection (lsp-stdio-connection (lambda () (list (or (executable-find "neocmakelsp") "neocmakelsp") "stdio")))
+    :activation-fn (lsp-activate-on "cmake")
+    :language-id "cmake"
+    :priority 1
+    :server-id 'neocmakelsp)))
+(add-hook! 'cmake-ts-mode-hook #'lsp!)
+
+;; -- terraform --
+(add-hook! 'terraform-mode-hook #'terraform-format-on-save-mode)
+
 ;; --- shell configuration ---
-(use-package! ghostel-compile
-  :hook
-  (after-init . ghostel-compile-global-mode))
-(use-package! ghostel-comint
-  :hook
-  (after-init . ghostel-comint-global-mode))
+;; TODO - need to evaluate if ghostel is annoying, or if it's just PEBCAK
+;;   - cursor shape is not respected between normal/insert
+;;   - normal emacs editing keybindings do not work
+;;   - cannot switch windows in insert mode, because they are vim keybindings
+;; (use-package! ghostel-compile
+;; :hook
+;; (after-init . ghostel-compile-global-mode))
+;; (use-package! ghostel-comint
+;; :hook
+;; (after-init . ghostel-comint-global-mode))
 (use-package! evil-ghostel
   :after (ghostel evil)
   :hook (ghostel-mode . evil-ghostel-mode))
@@ -139,8 +175,9 @@
 ;; terminals would otherwise come up in normal state. Land in insert so keys
 ;; reach the terminal. This covers claude-code-ide too, since it uses the
 ;; ghostel backend. C-z drops to emacs state; ESC to normal state.
-                                        ;(after! evil
-                                        ;  (evil-set-initial-state 'ghostel-mode 'insert))
+;; XXX - the following is taken care of with evil-ghostel
+;; (after! evil
+;; (evil-set-initial-state 'ghostel-mode 'insert))
 
 ;; ghostel leaves C-c C-u free. Send it through the terminal's key encoder
 ;; rather than a raw "\x15" so kitty-keyboard-protocol apps see it too.
@@ -148,6 +185,14 @@
   "Send \\`C-u' to the terminal, clearing the current input line."
   (interactive)
   (ghostel-send-key "u" "ctrl"))
+
+(defun my/ghostel-send-change-line ()
+  "Emulate changing the line in the terminal vim (`cc'), clearing the
+  current input line and entering insert mode."
+  (interactive)
+  (ghostel-send-key "e" "ctrl")
+  (ghostel-send-key "u" "ctrl")
+  (evil-insert 1))
 
 (after! ghostel
   ;; :n shadows evil's `c' operator in ghostel buffers (so cw/ciw are gone
@@ -158,6 +203,7 @@
         :n "cc" #'my/ghostel-send-C-u))
 
 ;; --- git link ---
+
 (after! git-link
   (setq git-link-use-commit t)
 
@@ -166,11 +212,7 @@
    :keymaps 'override
    "<SPC>ml" #'git-link))
 
-;; git link
-
-;;;;;;;;;
-;; LLM ;;
-;;;;;;;;;
+;; --- claude code ---
 
 (use-package! claude-code-ide
   :bind ("<f2>" . claude-code-ide-menu) ; Set your favorite keybinding
@@ -205,8 +247,13 @@
 ;; UI ;;
 ;;;;;;;;
 
+;; --- evil cursor changer ---
+;; TODO: this does not work in ghostel
+(after! evil
+  (require 'evil-terminal-cursor-changer)
+  (etcc-on))
 
-;; --- imenu ---
+;; --- use symbols-outline instead of imenu ---
 
 ;; We need a nerd-font compatible font like this one:
 ;; brew install font-iosevka-term-nerd-font
@@ -231,19 +278,18 @@
 
 ;; --- mode line ---
 
-(use-package! rich-minority
-  :defer nil
-  :config
-  (unless rich-minority-mode (rich-minority-mode 1))
-  (setq rm-whitelist (format "^ \\(%s\\)$"
-                             (mapconcat #'identity
-                                        '("Projectile.*" ".*Lsp.*")
-                                        "\\|"))))
+;; (use-package! rich-minority
+;;   :defer nil
+;;   :config
+;;   (unless rich-minority-mode (rich-minority-mode 1))
+;;   (setq rm-whitelist (format "^ \\(%s\\)$"
+;;                              (mapconcat #'identity
+;;                                         '("Projectile.*" ".*Lsp.*")
+;;                                         "\\|"))))
 
-(after! lsp-mode
-  (setq lsp-modeline-workspace-status-enable t
-        lsp-modeline-diagnostics-enable t
-        lsp-modeline-code-actions-enable t))
+(after! doom-modeline
+  (setq doom-modeline-position-column-line-format '("%l行%c列")
+        doom-modeline-vcs-max-length 25))
 
 ;; --- protobuf ---
 ;; protols is fully-featured lsp language server that uses protoc (unlike buf)
@@ -265,71 +311,6 @@
   (add-hook! 'protobuf-mode-hook
     (add-to-list 'flycheck-disabled-checkers 'protobuf-protoc)))
 
-(use-package! mood-line
-  :config
-  (mood-line-mode t)
-  (defun my/mood-line-segment-cursor-position ()
-    (format-mode-line "%l行%c列"))
-  (defun my/lsp-workspace-statuses ()
-    "Return an alist of (SERVER-ID . STATUS) for this buffer's workspaces.
-STATUS is `starting' or `initialized'."
-    (mapcar (lambda (ws)
-              (cons (lsp--client-server-id (lsp--workspace-client ws))
-                    (lsp--workspace-status ws)))
-            (lsp-workspaces)))
-  (defun my/lsp-overall-status ()
-    "Return `connected', `starting', or `exited' for the current buffer."
-    (if (and (bound-and-true-p lsp-mode) (fboundp 'lsp-workspaces))
-        (let ((workspaces (lsp-workspaces)))
-          (cond
-           ((null workspaces) "disconnected")
-           ((seq-some (lambda (ws) (eq (lsp--workspace-status ws) "starting")) workspaces)
-            'starting)
-           (t "connected")))
-      ""))
-  (setq mood-line-format
-        (mood-line-defformat
-         :left
-         (" " (mood-line-segment-modal) " "
-          (or (mood-line-segment-buffer-status) "  ")  ; alternative char is full-width
-          "[" (mood-line-segment-project) "]/"
-          (mood-line-segment-buffer-name) "  "
-          (mood-line-segment-anzu) "  "
-          (mood-line-segment-multiple-cursors) "  "
-          (my/mood-line-segment-cursor-position) " "
-          (mood-line-segment-scroll) "")
-         :right
-         ((mood-line-segment-vc) "  "
-          (mood-line-segment-major-mode) "  "
-          (mood-line-segment-misc-info)
-          ;; "LSP["
-          ;; (eval global-mode-string)
-          ;; "]"
-          ;; (my/lsp-overall-status) "  "
-                                        ; TODO - abbreviate this from "Checking" and "No issues"
-                                        ; TODO - add a segment that captures the status of the LSP process
-          (mood-line-segment-checker) "  "
-          (mood-line-segment-process) "  " " ")
-         ))
-  :custom
-  (mood-line-segment-modal-evil-state-alist
-   '((normal . ("[N]" . font-lock-variable-name-face))
-     (insert . ("[I]" . font-lock-string-face))
-     (visual . ("[V]" . font-lock-keyword-face))
-     (replace . ("[R]" . font-lock-type-face))
-     (motion . ("[M]" . font-lock-constant-face))
-     (operator . ("[O]" . font-lock-function-name-face))
-     (emacs . ("[E]" . font-lock-builtin-face))))
-  (mood-line-glyph-alist
-   '((:buffer-modified . ?変)
-     (:buffer-read-only . ?鍵))))
-
-(after! dape-mode
-  (global-set-key (kbd "<f7>") 'dape-step-in)
-  (global-set-key (kbd "<f8>") 'dape-next)
-  (global-set-key (kbd "<f9>") 'dape-continue)
-  (global-set-key (kbd "<f10>") 'dape-step-out))
-
 ;; --- projectile ---
 (after! projectile
   (map! :map projectile-mode-map
@@ -344,9 +325,9 @@ STATUS is `starting' or `initialized'."
   ;; Dockerfile was not loading in dockerfile-mode, so was not being remapped
   (add-to-list 'auto-mode-alist '("Dockerfile" . dockerfile-ts-mode)))
 
-;;;;;;;;;;;;;
-;; EDITING ;;
-;;;;;;;;;;;;;
+;;;;;;;;;;;;;;
+;; HERCULES ;;
+;;;;;;;;;;;;;;
 
 ;; --- multiple cursors ---
 
@@ -375,6 +356,146 @@ STATUS is `starting' or `initialized'."
    :keymap    '+mc-cursors-map
    :transient t))
 
+;; --- window management ---
+
+(after! evil
+  (defvar +window-resize-map evil-window-map
+    "Resize-only subset of `evil-window-map'.")
+
+  (defvar +window-resize-funs
+    '(evil-window-increase-height evil-window-decrease-height
+      evil-window-increase-width  evil-window-decrease-width
+      evil-window-set-height      evil-window-set-width
+      doom/window-enlargen        balance-windows)
+    "Commands kept in `+window-resize-map'.")
+
+  ;; `:transient t' routes through `set-transient-map', so keys in the map
+  ;; repeat and any other key dismisses the popup and runs normally.
+  ;;
+  ;; `balance-windows' stays in the *map* but out of `:show-funs':
+  ;; `evil-auto-balance-windows' calls it behind every split, which would pop
+  ;; the resize map open unbidden.
+  (hercules-def
+   :show-funs      (remq 'balance-windows +window-resize-funs)
+   :keymap         '+window-resize-map
+   :whitelist-funs +window-resize-funs
+   :transient t))
+
+;; --- vc hunks ---
+
+;; Doom already binds `SPC g [' / `SPC g ]' to the hunk motions; all this adds
+;; is stickiness, so `SPC g ]]]' walks three hunks forward and `[' reverses
+;; without re-entering the prefix.
+;;
+;; `+vc-gutter-hunk-map' starts life as `doom-leader-git-map' itself, but
+;; `:whitelist-funs' `set's the symbol to a freshly built sparse map containing
+;; only the whitelisted bindings -- the real leader map is never mutated.
+(after! evil
+  (defvar +vc-gutter-hunk-map doom-leader-git-map
+    "Hunk-motion-only subset of `doom-leader-git-map'.")
+
+  (defvar +vc-gutter-hunk-funs
+    '(+vc-gutter/next-hunk +vc-gutter/previous-hunk)
+    "Commands kept in `+vc-gutter-hunk-map'.")
+
+  (hercules-def
+   :show-funs      +vc-gutter-hunk-funs
+   :keymap         '+vc-gutter-hunk-map
+   :whitelist-funs +vc-gutter-hunk-funs
+   :transient t))
+
+;; --- dape stepping ---
+
+;; Same trick over Doom's `SPC d' debugger prefix: `SPC d n' then bare `n n n'
+;; to step, `s'/`o' to dive in and out, `c' to continue.
+;;
+;; `after! dape' is load-bearing twice over: it keeps `hercules--advise' from
+;; `fset'ting a no-op onto a command that isn't loaded yet, and it defers the
+;; whitelist rebuild until the session actually starts. `SPC d d' autoloads
+;; dape, which runs this before any stepping key can be pressed.
+(after! dape
+  (defvar +dape-step-map doom-leader-debugger-map
+    "Stepping-only subset of `doom-leader-debugger-map'.")
+
+  (defvar +dape-step-funs
+    '(dape-next dape-step-in dape-step-out dape-continue dape-pause)
+    "Commands kept in `+dape-step-map'.")
+
+  (hercules-def
+   :show-funs      +dape-step-funs
+   :keymap         '+dape-step-map
+   :whitelist-funs +dape-step-funs
+   :transient t))
+
+;; --- dape: jest ---
+
+;; None of dape's stock js-debug configs can run a jest test: they all set
+;; `:program dape-buffer-default', i.e. hand the *test file itself* to
+;; node/ts-node/tsx.  A jest test only makes sense inside jest's runtime
+;; (`describe'/`jest.mock' globals, `moduleNameMapper' for the `@/' aliases, the
+;; jsdom environment, the SWC transform), so the program has to be jest and the
+;; test file has to be an argument.  Two more mismatches for good measure:
+;; `js-debug-node' is `modes (js-mode js-ts-mode)' so it isn't even suggested in
+;; a `typescript-ts-mode' buffer, and `js-debug-ts-node'/`js-debug-tsx' fail
+;; `ensure' because ts-node/tsx live in a project's node_modules/.bin, not on
+;; `exec-path'.
+;;
+;; `:cwd' can't be `dape-cwd' either -- Doom points `dape-cwd-function' at the
+;; projectile root, which in a monorepo is the git root, while jest must run
+;; from the directory holding jest.config.js.
+(after! dape
+  (defun +dape-jest-root ()
+    "Directory of the nearest jest project, falling back to `dape-cwd'.
+Expanded: `default-directory' is often abbreviated to `~/...', which node
+would not resolve."
+    (expand-file-name
+     (or (locate-dominating-file (or (buffer-file-name) default-directory)
+                                 "jest.config.js")
+         (dape-cwd))))
+
+  (defun +dape-jest-program ()
+    "Path to jest's CLI entry point, relative to `+dape-jest-root'."
+    "node_modules/jest/bin/jest.js")
+
+  (add-to-list
+   'dape-configs
+   `(jest
+     modes (typescript-ts-mode typescript-mode tsx-ts-mode
+                               js-ts-mode js-mode js-jsx-mode)
+     ensure ,(lambda (config)
+               (dape-ensure-command config)
+               (let ((server (car (plist-get config 'command-args))))
+                 (unless (file-exists-p server)
+                   (user-error "js-debug missing, %S does not exist" server)))
+               (let* ((root (+dape-jest-root))
+                      (jest (file-name-concat root (+dape-jest-program))))
+                 (unless (file-exists-p jest)
+                   (user-error "No jest under %S" root))))
+     command "node"
+     command-args (,(expand-file-name
+                     (file-name-concat dape-adapter-dir
+                                       "js-debug" "src" "dapDebugServer.js"))
+                   :autoport)
+     port :autoport
+     :type "pwa-node"
+     :request "launch"
+     :cwd +dape-jest-root
+     :program +dape-jest-program
+     ;; `--runInBand' keeps the tests in the process js-debug launched; without
+     ;; it jest forks workers and breakpoints depend on child auto-attach.
+     :args ,(lambda ()
+              (vector "--runInBand" "--no-coverage"
+                      (if (buffer-file-name)
+                          (file-relative-name (buffer-file-name)
+                                              (+dape-jest-root))
+                        "")))
+     ;; jest writes its report straight to stderr, which `outputCapture'
+     ;; "console" (the js-debug default) does not forward.
+     :console "internalConsole"
+     :outputCapture "std"
+     :sourceMaps t
+     :skipFiles ["<node_internals>/**"])))
+
 ;;;;;;;;;;;;;;;;;;;;;
 ;; VERSION CONTROL ;;
 ;;;;;;;;;;;;;;;;;;;;;
@@ -401,17 +522,14 @@ STATUS is `starting' or `initialized'."
 (setq confirm-kill-emacs nil)
 (xterm-mouse-mode t)
 
-(evil-global-set-key 'normal (kbd "C-z") 'suspend-frame)
-(evil-global-set-key 'insert (kbd "C-z") 'suspend-frame)
-(evil-global-set-key 'visual (kbd "C-z") 'suspend-frame)
 (general-define-key
- :states '(normal visual motion)
+ :states '(normal visual motion insert)
  :keymaps 'override
- "C-w o" #'delete-other-windows)
+ "C-z" #'suspend-frame)
 (general-define-key
- :states '(normal visual motion)
+ :states '(normal visual motion insert)
  :keymaps 'override
- "C-w O" #'doom/window-enlargen)
+ "<f11>" #'window-toggle-side-windows)
 (defun comment-thing ()
   (interactive)
   (if (region-active-p)
