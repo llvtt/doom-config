@@ -290,7 +290,7 @@
 
 (after! doom-modeline
   (setq doom-modeline-position-column-line-format '("%l行%c列")
-        doom-modeline-vcs-max-length 25))
+        doom-modeline-vcs-max-length 40))
 
 ;; --- protobuf ---
 ;; protols is fully-featured lsp language server that uses protoc (unlike buf)
