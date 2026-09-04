@@ -96,6 +96,13 @@
         "i" #'lsp-find-implementation
         "f" #'lsp-clangd-find-other-file
         "s" #'consult-lsp-file-symbols))
+(after! (lsp-mode flycheck)
+  (map! :map lsp-mode-map
+        :leader
+        :prefix ("l" . "LSP")
+        "el" #'flycheck-list-errors
+        "en" #'flycheck-next-error
+        "ep" #'flycheck-previous-error))
 
 (remove-hook 'doom-first-input-hook #'evil-snipe-mode)
 
@@ -109,11 +116,25 @@
 (use-package! mise-tasks
   :config
   (mise-tasks-projectile-mode t)
+
+  ;; ;; `mise-tasks--compile' reuses a single per-project buffer, so starting a
+  ;; ;; second task kills the first. Give each task its own buffer, keyed by the
+  ;; ;; actual command run, so multiple tasks can run concurrently.
+  ;; (defun +mise-tasks-per-task-buffer-name (orig-fn root command)
+  ;;   (let ((mise-tasks-buffer-name-function
+  ;;          (lambda (root)
+  ;;            (format "*mise: %s: %s*"
+  ;;                    (file-name-nondirectory (directory-file-name root))
+  ;;                    command))))
+  ;;     (funcall orig-fn root command)))
+  ;; (advice-add 'mise-tasks--compile :around #'+mise-tasks-per-task-buffer-name)
+
   (map! :leader
         :prefix ("r" . "Run")
         :desc "List tasks" "l" #'mise-tasks-list
         :desc "Run task" "c" #'mise-tasks-run
         :desc "Run last" "r" #'mise-tasks-run-last)
+
   (evil-define-key '(normal motion) mise-tasks-list-mode-map
     (kbd "RET") #'mise-tasks-list-run-at-point
     "g" #'mise-tasks-list-refresh
@@ -156,17 +177,22 @@
 ;; -- terraform --
 (add-hook! 'terraform-mode-hook #'terraform-format-on-save-mode)
 
+;; --- device tree ---
+(after! '(device-ts-mode treesit)
+  (add-to-list 'treesit-language-source-alist
+               '(devicetree "https://github.com/joelspadin/tree-sitter-devicetree")))
+
 ;; --- shell configuration ---
 ;; TODO - need to evaluate if ghostel is annoying, or if it's just PEBCAK
 ;;   - cursor shape is not respected between normal/insert
 ;;   - normal emacs editing keybindings do not work
 ;;   - cannot switch windows in insert mode, because they are vim keybindings
-;; (use-package! ghostel-compile
-;; :hook
-;; (after-init . ghostel-compile-global-mode))
-;; (use-package! ghostel-comint
-;; :hook
-;; (after-init . ghostel-comint-global-mode))
+(use-package! ghostel-compile
+  :hook
+  (after-init . ghostel-compile-global-mode))
+(use-package! ghostel-comint
+  :hook
+  (after-init . ghostel-comint-global-mode))
 (use-package! evil-ghostel
   :after (ghostel evil)
   :hook (ghostel-mode . evil-ghostel-mode))
@@ -252,6 +278,13 @@
 ;; TODO: this does not work in ghostel
 (after! evil
   (require 'evil-terminal-cursor-changer)
+  ;; It's often hard to see text inside a box, so make most of these 'hbar
+  (setq
+   evil-motion-state-cursor 'hbar
+   evil-visual-state-cursor 'box
+   evil-normal-state-cursor 'hbar
+   evil-emacs-state-cursor 'hbar
+   evil-insert-state-cursor 'bar)
   (etcc-on))
 
 ;; --- use symbols-outline instead of imenu ---
@@ -504,11 +537,16 @@ would not resolve."
 (use-package! code-review
   :config
   (require 'ghub-legacy)
-  (setq code-review-auth-login-marker 'forge))
+  (setq code-review-auth-login-marker 'forge)
+  (map! :map code-review-mode-map
+        :nvm
+        "c" #'code-review-comment-add-or-edit))
 
 (use-package! magit
   :config
-  (setq git-commit-summary-max-length 100))
+  (setq git-commit-summary-max-length 100)
+  (map! :leader
+        :desc "Magit diff" "g d" #'magit-diff))
 
 ;;;;;;;;;;;;;;;;;;
 ;; GLOBAL STUFF ;;
@@ -518,11 +556,39 @@ would not resolve."
 
 (setq-hook! '(typescript-mode-hook javascript-mode-hook) +format-with '(lsp eslint prettier))
 (add-hook! '(javascript-mode-hook typescript-mode-hook) #'jest-test-mode)
+(after! lsp-mode
+  (lsp-register-client
+   (make-lsp-client
+    :new-connection (lsp-stdio-connection (lambda () (list (or (executable-find "typescript-languge-server") "typescript-languge-server") "--lsp" "--stdio")))
+    :activation-fn (lsp-activate-on "typescript" "typescriptreact" "javascript" "javascriptreact")
+    :language-id "typescript"
+    :priority 1
+    :server-id 'typescript-language-server)))
+
+;; `lang/javascript' drops `?\n' from `electric-indent-chars' for TS modes
+;; (only `}'/`)' trigger reindent), which silently breaks RET-triggered
+;; indentation entirely -- both plain `newline' and
+;; `electric-newline-and-maybe-indent' rely on `?\n' being in that list.
+;; Restore it while keeping the extra `}'/`)' electric behavior.
+(dolist (mode '(typescript-ts-mode tsx-ts-mode typescript-mode))
+  (set-electric! mode :chars '(?\n ?\} ?\)) :words '("||" "&&")))
 
 (fset 'yes-or-no-p 'y-or-n-p)
 (setq confirm-kill-emacs nil)
 (xterm-mouse-mode t)
 
+(setq-default fill-column 100)
+
+(general-define-key
+ :keymaps 'doom-leader-buffer-map
+ "w" #'consult-buffer-other-window)
+(general-define-key
+ :keymaps 'doom-leader-file-map
+ "w" #'projectile-find-file-other-window)
+(general-define-key
+ :states '(normal visual motion)
+ :keymaps 'override
+ "<SPC> w w" #'ace-window)
 (general-define-key
  :states '(normal visual motion insert)
  :keymaps 'override

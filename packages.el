@@ -74,3 +74,6 @@
 
 (package! mise)
 (package! mise-tasks)
+
+(package! devicetree-ts-mode
+  :recipe (:type git :host github :repo "emacs-straight/devicetree-ts-mode"))
